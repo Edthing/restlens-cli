@@ -1,17 +1,17 @@
-# @restlens/restlens-cli
+# @restlens/cli
 
 CLI for [REST Lens](https://restlens.com) API evaluation.
 
 ## Installation
 
 ```bash
-npx @restlens/restlens-cli@latest <command>
+npx @restlens/cli@latest <command>
 ```
 
 Or install globally:
 
 ```bash
-npm install -g @restlens/restlens-cli
+npm install -g @restlens/cli
 ```
 
 ## Usage
@@ -58,6 +58,25 @@ restlens logout
 
 All commands support:
 - `--server <url>` - Use a different REST Lens server (default: https://restlens.com)
+
+## Multi-Server Support
+
+For non-production servers, set the `RESTLENS_URL` environment variable:
+
+```bash
+export RESTLENS_URL=https://staging.restlens.com
+restlens auth
+restlens eval ./openapi.yaml -p my-org/my-project
+```
+
+Alternatively, use the `--server` flag on each command:
+
+```bash
+restlens auth --server https://staging.restlens.com
+restlens eval ./openapi.yaml -p my-org/my-project --server https://staging.restlens.com
+```
+
+Tokens are stored per-server in `~/.restlens/auth.json`.
 
 ## License
 

@@ -1,5 +1,5 @@
 {
-  "name": "@restlens/restlens-cli",
+  "name": "@restlens/cli",
   "version": "0.1.0",
   "description": "CLI for REST Lens API evaluation",
   "type": "module",

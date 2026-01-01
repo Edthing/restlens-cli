@@ -5,25 +5,56 @@ import { mkdir, readFile, writeFile, unlink } from "fs/promises";
 const CONFIG_DIR = join(homedir(), ".restlens");
 const CONFIG_FILE = join(CONFIG_DIR, "auth.json");
 
-export interface Config {
-  server: string;
-  accessToken?: string;
+const DEFAULT_SERVER = "https://restlens.com";
+
+export interface ServerAuth {
+  accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
+}
+
+export interface Config {
+  servers: Record<string, ServerAuth>;
+}
+
+/**
+ * Get the server URL from environment or default
+ */
+export function getServerUrl(override?: string): string {
+  return override || process.env.RESTLENS_URL || process.env.RESTLENS_SERVER || DEFAULT_SERVER;
 }
 
 export async function getConfig(): Promise<Config> {
   try {
     const data = await readFile(CONFIG_FILE, "utf-8");
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // Migrate old format
+    if (parsed.accessToken && !parsed.servers) {
+      return {
+        servers: {
+          [parsed.server || DEFAULT_SERVER]: {
+            accessToken: parsed.accessToken,
+            refreshToken: parsed.refreshToken,
+            expiresAt: parsed.expiresAt,
+          },
+        },
+      };
+    }
+    return parsed.servers ? parsed : { servers: {} };
   } catch {
-    return { server: "https://restlens.com" };
+    return { servers: {} };
   }
 }
 
 export async function saveConfig(config: Config): Promise<void> {
   await mkdir(CONFIG_DIR, { recursive: true });
   await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+export async function saveServerAuth(server: string, auth: ServerAuth): Promise<void> {
+  const config = await getConfig();
+  config.servers[server] = auth;
+  await saveConfig(config);
 }
 
 export async function clearConfig(): Promise<void> {
@@ -34,33 +65,43 @@ export async function clearConfig(): Promise<void> {
   }
 }
 
-export async function getAccessToken(serverOverride?: string): Promise<{ token: string; server: string }> {
+export async function clearServerAuth(server: string): Promise<void> {
   const config = await getConfig();
-  const server = serverOverride || config.server;
+  delete config.servers[server];
+  await saveConfig(config);
+}
 
-  if (!config.accessToken) {
-    throw new Error("Not authenticated. Run: restlens auth");
+export async function getAccessToken(serverOverride?: string): Promise<{ token: string; server: string }> {
+  const server = getServerUrl(serverOverride);
+  const config = await getConfig();
+  const auth = config.servers[server];
+
+  if (!auth?.accessToken) {
+    const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+    throw new Error(`Not authenticated for ${server}. Run: restlens auth${serverHint}`);
   }
 
   // Check if token is expired (with 5 min buffer)
-  if (config.expiresAt && Date.now() > config.expiresAt - 5 * 60 * 1000) {
+  if (auth.expiresAt && Date.now() > auth.expiresAt - 5 * 60 * 1000) {
     // Try to refresh
-    if (config.refreshToken) {
+    if (auth.refreshToken) {
       try {
-        const newTokens = await refreshTokens(server, config.refreshToken);
-        config.accessToken = newTokens.accessToken;
-        config.refreshToken = newTokens.refreshToken;
-        config.expiresAt = Date.now() + newTokens.expiresIn * 1000;
-        await saveConfig(config);
+        const newTokens = await refreshTokens(server, auth.refreshToken);
+        auth.accessToken = newTokens.accessToken;
+        auth.refreshToken = newTokens.refreshToken;
+        auth.expiresAt = Date.now() + newTokens.expiresIn * 1000;
+        await saveServerAuth(server, auth);
       } catch {
-        throw new Error("Token expired. Run: restlens auth");
+        const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+        throw new Error(`Token expired for ${server}. Run: restlens auth${serverHint}`);
       }
     } else {
-      throw new Error("Token expired. Run: restlens auth");
+      const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+      throw new Error(`Token expired for ${server}. Run: restlens auth${serverHint}`);
     }
   }
 
-  return { token: config.accessToken, server };
+  return { token: auth.accessToken, server };
 }
 
 async function refreshTokens(

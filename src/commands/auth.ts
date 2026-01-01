@@ -1,15 +1,15 @@
 import { createServer } from "http";
 import { randomBytes, createHash } from "crypto";
-import { saveConfig } from "../config.js";
+import { saveServerAuth, getServerUrl } from "../config.js";
 
 interface AuthOptions {
-  server: string;
+  server?: string;
 }
 
 export async function auth(options: AuthOptions): Promise<void> {
-  const server = options.server;
+  const server = getServerUrl(options.server);
 
-  console.log("Starting authentication...");
+  console.log(`Authenticating with ${server}...`);
 
   // Generate PKCE challenge
   const codeVerifier = randomBytes(32).toString("base64url");
@@ -79,9 +79,8 @@ export async function auth(options: AuthOptions): Promise<void> {
 
   const tokens = await tokenResponse.json();
 
-  // Save config
-  await saveConfig({
-    server,
+  // Save auth for this server
+  await saveServerAuth(server, {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresAt: Date.now() + tokens.expires_in * 1000,
