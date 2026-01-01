@@ -1,5 +1,5 @@
 {
-  "name": "restlens-cli",
+  "name": "@restlens/restlens-cli",
   "version": "0.1.0",
   "description": "CLI for REST Lens API evaluation",
   "type": "module",
@@ -26,6 +26,14 @@
   "engines": {
     "node": ">=18"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Edthing/restlens-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Edthing/restlens-cli/issues"
+  },
+  "homepage": "https://github.com/Edthing/restlens-cli#readme",
   "keywords": [
     "restlens",
     "api",
@@ -33,5 +41,8 @@
     "swagger",
     "cli"
   ],
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "publishConfig": {
+    "access": "public"
+  }
 }

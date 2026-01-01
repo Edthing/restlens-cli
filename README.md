@@ -1,17 +1,17 @@
-# restlens-cli
+# @restlens/restlens-cli
 
 CLI for [REST Lens](https://restlens.com) API evaluation.
 
 ## Installation
 
 ```bash
-npx restlens-cli@latest <command>
+npx @restlens/restlens-cli@latest <command>
 ```
 
 Or install globally:
 
 ```bash
-npm install -g restlens-cli
+npm install -g @restlens/restlens-cli
 ```
 
 ## Usage
