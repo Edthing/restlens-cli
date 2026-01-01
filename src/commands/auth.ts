@@ -24,7 +24,7 @@ export async function auth(options: AuthOptions): Promise<void> {
   const redirectUri = `http://localhost:${port}/callback`;
 
   // Build authorization URL
-  const authUrl = new URL(`${server}/api/mcp/authorize`);
+  const authUrl = new URL(`${server}/api/oauth/authorize`);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", "restlens-cli");
   authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -59,7 +59,7 @@ export async function auth(options: AuthOptions): Promise<void> {
 
   // Exchange code for tokens
   console.log("Exchanging code for tokens...");
-  const tokenResponse = await fetch(`${server}/api/mcp/token`, {
+  const tokenResponse = await fetch(`${server}/api/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({

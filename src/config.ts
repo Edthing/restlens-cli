@@ -108,7 +108,7 @@ async function refreshTokens(
   server: string,
   refreshToken: string
 ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
-  const response = await fetch(`${server}/api/mcp/token`, {
+  const response = await fetch(`${server}/api/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
