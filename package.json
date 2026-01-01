@@ -1,6 +1,6 @@
 {
   "name": "@restlens/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CLI for REST Lens API evaluation",
   "type": "module",
   "bin": {
@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
-    "open": "^10.1.0"
+    "open": "^10.1.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

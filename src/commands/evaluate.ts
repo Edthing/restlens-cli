@@ -1,6 +1,5 @@
-import { readFile } from "fs/promises";
-import { resolve } from "path";
 import { getAccessToken } from "../config.js";
+import { readAndParseSpec, uploadSpec, parseProject } from "../api.js";
 
 interface EvaluateOptions {
   project: string;
@@ -13,87 +12,53 @@ export async function evaluate(file: string, options: EvaluateOptions): Promise<
   const { token, server } = await getAccessToken(options.server);
   const timeoutMs = parseInt(options.timeout, 10) * 1000;
 
-  // Parse project
-  const [orgSlug, projectName] = options.project.split("/");
-  if (!orgSlug || !projectName) {
-    console.error("Error: Project must be in org/name format (e.g., my-org/my-project)");
+  let orgSlug: string, projectName: string;
+  try {
+    ({ orgSlug, projectName } = parseProject(options.project));
+  } catch (error) {
+    console.error(`Error: ${(error as Error).message}`);
     process.exit(1);
   }
 
-  // Read spec file
-  const filePath = resolve(process.cwd(), file);
-  let specContent: string;
+  let specData: object;
   try {
-    specContent = await readFile(filePath, "utf-8");
+    specData = await readAndParseSpec(file);
   } catch (error) {
-    console.error(`Error reading file: ${filePath}`);
+    console.error(`Error: ${(error as Error).message}`);
     process.exit(1);
   }
 
   console.log(`Uploading ${file} to ${options.project}...`);
 
-  // Upload specification
-  const uploadResponse = await fetch(
-    `${server}/api/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectName)}/specifications`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        specification: specContent,
-        tag: options.tag,
-      }),
-    }
-  );
-
-  if (!uploadResponse.ok) {
-    const error = await uploadResponse.json().catch(() => ({ error: "Unknown error" }));
-    console.error(`Upload failed: ${error.error || uploadResponse.statusText}`);
+  let specId: string;
+  try {
+    const uploadResult = await uploadSpec(server, token, orgSlug, projectName, specData, options.tag);
+    specId = uploadResult.specification.id;
+    console.log(`Uploaded. Specification ID: ${specId}`);
+  } catch (error) {
+    console.error(`Upload failed: ${(error as Error).message}`);
     process.exit(1);
   }
 
-  const uploadResult = await uploadResponse.json();
-  const specId = uploadResult.specification.id;
-  console.log(`Uploaded. Specification ID: ${specId}`);
-
-  // Wait for evaluation
+  // Wait for evaluation using SSE stream
   console.log(`\nWaiting for evaluation (timeout: ${options.timeout}s)...`);
-  const startTime = Date.now();
-  let status = "evaluating";
-  let lastDots = 0;
 
-  while (status === "evaluating" && Date.now() - startTime < timeoutMs) {
-    await sleep(2000);
+  const completed = await waitForEvaluation(
+    server,
+    token,
+    orgSlug,
+    projectName,
+    specId,
+    timeoutMs
+  );
 
-    const dots = Math.floor((Date.now() - startTime) / 2000) % 4;
-    if (dots !== lastDots) {
-      process.stdout.write(`\rEvaluating${".".repeat(dots + 1)}${" ".repeat(3 - dots)}`);
-      lastDots = dots;
-    }
-
-    // Check status
-    const statusResponse = await fetch(
-      `${server}/api/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectName)}/specifications/${specId}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    if (statusResponse.ok) {
-      const statusResult = await statusResponse.json();
-      status = statusResult.evaluationStatus || "evaluating";
-    }
-  }
-
-  console.log("\n");
-
-  if (status === "evaluating") {
-    console.log("Evaluation still in progress. Check back with:");
+  if (!completed) {
+    console.log("\nEvaluation still in progress. Check back with:");
     console.log(`  restlens violations -p ${options.project}`);
     return;
   }
+
+  console.log("\nEvaluation complete!");
 
   // Get violations
   const violationsResponse = await fetch(
@@ -117,10 +82,14 @@ function printViolations(result: {
     key: { path?: string; operation_id?: string; schema_path?: string };
     value: Array<{ message: string; severity: string; rule_id: number }>;
   }>;
-  totalViolations?: number;
 }): void {
   const violations = result.violations || [];
-  const total = result.totalViolations || 0;
+
+  // Count total violations
+  let total = 0;
+  for (const group of violations) {
+    total += group.value.length;
+  }
 
   if (total === 0) {
     console.log("No violations found!");
@@ -155,6 +124,85 @@ function printViolations(result: {
   console.log(`Summary: ${errorCount} errors, ${warningCount} warnings, ${infoCount} info`);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function waitForEvaluation(
+  server: string,
+  token: string,
+  orgSlug: string,
+  projectName: string,
+  specId: string,
+  timeoutMs: number
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+      resolve(false);
+    }, timeoutMs);
+
+    let dotCount = 0;
+    const dotInterval = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      process.stdout.write(`\rEvaluating${".".repeat(dotCount + 1)}${" ".repeat(3 - dotCount)}`);
+    }, 500);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      clearInterval(dotInterval);
+    };
+
+    fetch(
+      `${server}/api/projects/${encodeURIComponent(orgSlug)}/${encodeURIComponent(projectName)}/specifications/${specId}/stream`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      }
+    )
+      .then(async (response) => {
+        if (!response.ok || !response.body) {
+          cleanup();
+          resolve(false);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.type === "status" && event.status === "done") {
+                  cleanup();
+                  resolve(true);
+                  return;
+                }
+                if (event.status === "failed") {
+                  cleanup();
+                  resolve(true);
+                  return;
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+
+        cleanup();
+        resolve(true);
+      })
+      .catch(() => {
+        cleanup();
+        resolve(false);
+      });
+  });
 }
