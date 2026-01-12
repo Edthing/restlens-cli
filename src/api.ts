@@ -1,6 +1,9 @@
 import { readFile } from "fs/promises";
 import { resolve } from "path";
-import { parse as parseYaml } from "yaml";
+import { parseSpec, parseProject } from "@restlens/lib";
+
+// Re-export parseProject from lib
+export { parseProject };
 
 export interface UploadResult {
   specification: {
@@ -18,20 +21,11 @@ export async function readAndParseSpec(file: string): Promise<object> {
   let specContent: string;
   try {
     specContent = await readFile(filePath, "utf-8");
-  } catch (error) {
+  } catch {
     throw new Error(`Error reading file: ${filePath}`);
   }
 
-  // Parse the spec (try JSON first, then YAML)
-  try {
-    return JSON.parse(specContent);
-  } catch {
-    try {
-      return parseYaml(specContent);
-    } catch (e) {
-      throw new Error("Invalid specification format. Must be valid JSON or YAML.");
-    }
-  }
+  return parseSpec(specContent);
 }
 
 export async function uploadSpec(
@@ -63,12 +57,4 @@ export async function uploadSpec(
   }
 
   return response.json();
-}
-
-export function parseProject(project: string): { orgSlug: string; projectName: string } {
-  const [orgSlug, projectName] = project.split("/");
-  if (!orgSlug || !projectName) {
-    throw new Error("Project must be in org/name format (e.g., my-org/my-project)");
-  }
-  return { orgSlug, projectName };
 }

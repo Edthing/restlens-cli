@@ -15,9 +15,9 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@restlens/lib": "^0.1.0",
     "commander": "^12.1.0",
-    "open": "^10.1.0",
-    "yaml": "^2.8.2"
+    "open": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

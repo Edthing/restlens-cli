@@ -1,27 +1,20 @@
 import { homedir } from "os";
 import { join } from "path";
 import { mkdir, readFile, writeFile, unlink } from "fs/promises";
+import { DEFAULT_API_URL, type ServerAuth, type AuthConfig } from "@restlens/lib";
 
 const CONFIG_DIR = join(homedir(), ".restlens");
 const CONFIG_FILE = join(CONFIG_DIR, "auth.json");
 
-const DEFAULT_SERVER = "https://restlens.com";
-
-export interface ServerAuth {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt?: number;
-}
-
-export interface Config {
-  servers: Record<string, ServerAuth>;
-}
+// Re-export types
+export type { ServerAuth };
+export type Config = AuthConfig;
 
 /**
  * Get the server URL from environment or default
  */
 export function getServerUrl(override?: string): string {
-  return override || process.env.RESTLENS_URL || process.env.RESTLENS_SERVER || DEFAULT_SERVER;
+  return override || process.env.RESTLENS_URL || process.env.RESTLENS_SERVER || DEFAULT_API_URL;
 }
 
 export async function getConfig(): Promise<Config> {
@@ -32,7 +25,7 @@ export async function getConfig(): Promise<Config> {
     if (parsed.accessToken && !parsed.servers) {
       return {
         servers: {
-          [parsed.server || DEFAULT_SERVER]: {
+          [parsed.server || DEFAULT_API_URL]: {
             accessToken: parsed.accessToken,
             refreshToken: parsed.refreshToken,
             expiresAt: parsed.expiresAt,
@@ -77,7 +70,7 @@ export async function getAccessToken(serverOverride?: string): Promise<{ token: 
   const auth = config.servers[server];
 
   if (!auth?.accessToken) {
-    const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+    const serverHint = server !== DEFAULT_API_URL ? ` --server ${server}` : "";
     throw new Error(`Not authenticated for ${server}. Run: restlens auth${serverHint}`);
   }
 
@@ -92,11 +85,11 @@ export async function getAccessToken(serverOverride?: string): Promise<{ token: 
         auth.expiresAt = Date.now() + newTokens.expiresIn * 1000;
         await saveServerAuth(server, auth);
       } catch {
-        const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+        const serverHint = server !== DEFAULT_API_URL ? ` --server ${server}` : "";
         throw new Error(`Token expired for ${server}. Run: restlens auth${serverHint}`);
       }
     } else {
-      const serverHint = server !== DEFAULT_SERVER ? ` --server ${server}` : "";
+      const serverHint = server !== DEFAULT_API_URL ? ` --server ${server}` : "";
       throw new Error(`Token expired for ${server}. Run: restlens auth${serverHint}`);
     }
   }
