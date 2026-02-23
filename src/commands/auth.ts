@@ -31,6 +31,7 @@ export async function auth(options: AuthOptions): Promise<void> {
   authUrl.searchParams.set("code_challenge", codeChallenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
   authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("scope", "projects:read specs:read specs:write");
 
   console.log("\nOpening browser for authentication...");
   console.log(`If browser doesn't open, visit:\n${authUrl.toString()}\n`);

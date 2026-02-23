@@ -1,5 +1,6 @@
 import { getAccessToken } from "../config.js";
 import { readAndParseSpec, uploadSpec, parseProject } from "../api.js";
+import { printViolations, printReportUrl } from "../format.js";
 
 interface EvaluateOptions {
   project: string;
@@ -75,53 +76,7 @@ export async function evaluate(file: string, options: EvaluateOptions): Promise<
 
   const violationsResult = await violationsResponse.json();
   printViolations(violationsResult);
-}
-
-function printViolations(result: {
-  violations?: Array<{
-    key: { path?: string; operation_id?: string; schema_path?: string };
-    value: Array<{ message: string; severity: string; rule_id: number }>;
-  }>;
-}): void {
-  const violations = result.violations || [];
-
-  // Count total violations
-  let total = 0;
-  for (const group of violations) {
-    total += group.value.length;
-  }
-
-  if (total === 0) {
-    console.log("No violations found!");
-    return;
-  }
-
-  console.log(`Found ${total} violation(s):\n`);
-
-  let errorCount = 0;
-  let warningCount = 0;
-  let infoCount = 0;
-
-  for (const group of violations) {
-    const location = group.key.path || group.key.schema_path || "(global)";
-
-    for (const v of group.value) {
-      const severityIcon =
-        v.severity === "error" ? "\x1b[31m\u2717\x1b[0m" :
-        v.severity === "warning" ? "\x1b[33m\u26a0\x1b[0m" :
-        "\x1b[34m\u2139\x1b[0m";
-
-      if (v.severity === "error") errorCount++;
-      else if (v.severity === "warning") warningCount++;
-      else infoCount++;
-
-      console.log(`${severityIcon} [Rule ${v.rule_id}] ${location}`);
-      console.log(`  ${v.message}\n`);
-    }
-  }
-
-  console.log("---");
-  console.log(`Summary: ${errorCount} errors, ${warningCount} warnings, ${infoCount} info`);
+  printReportUrl(server, orgSlug, projectName, specId);
 }
 
 async function waitForEvaluation(

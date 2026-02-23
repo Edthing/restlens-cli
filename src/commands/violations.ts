@@ -1,4 +1,5 @@
 import { getAccessToken } from "../config.js";
+import { printViolations } from "../format.js";
 
 interface ViolationsOptions {
   project: string;
@@ -70,47 +71,4 @@ export async function violations(options: ViolationsOptions): Promise<void> {
 
   const result = await violationsResponse.json();
   printViolations(result);
-}
-
-function printViolations(result: {
-  violations?: Array<{
-    key: { path?: string; operation_id?: string; schema_path?: string };
-    value: Array<{ message: string; severity: string; rule_id: number }>;
-  }>;
-  totalViolations?: number;
-}): void {
-  const violations = result.violations || [];
-  const total = result.totalViolations || 0;
-
-  if (total === 0) {
-    console.log("No violations found!");
-    return;
-  }
-
-  console.log(`Found ${total} violation(s):\n`);
-
-  let errorCount = 0;
-  let warningCount = 0;
-  let infoCount = 0;
-
-  for (const group of violations) {
-    const location = group.key.path || group.key.schema_path || "(global)";
-
-    for (const v of group.value) {
-      const severityIcon =
-        v.severity === "error" ? "\x1b[31m\u2717\x1b[0m" :
-        v.severity === "warning" ? "\x1b[33m\u26a0\x1b[0m" :
-        "\x1b[34m\u2139\x1b[0m";
-
-      if (v.severity === "error") errorCount++;
-      else if (v.severity === "warning") warningCount++;
-      else infoCount++;
-
-      console.log(`${severityIcon} [Rule ${v.rule_id}] ${location}`);
-      console.log(`  ${v.message}\n`);
-    }
-  }
-
-  console.log("---");
-  console.log(`Summary: ${errorCount} errors, ${warningCount} warnings, ${infoCount} info`);
 }
